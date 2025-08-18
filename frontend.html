@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Websocket Client</title>
+    <style>
+      html,
+      body {
+        height: 100vh;
+        width: 100vw;
+        background-color: ghostwhite;
+      }
+
+      .message-box {
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        border: 1px solid black;
+      }
+
+      .message-chat {
+        flex-grow: 1;
+        height: 100vh;
+        border: 1px solid blue;
+      }
+
+      .message-wrapper {
+        flex-grow: 2;
+        height: 100vh;
+        border: 1px solid black;
+      }
+
+      .message-container {
+        height: 80%;
+      }
+
+      .chat-input {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 80%;
+      }
+
+      .chat-input input {
+        padding: 5px;
+        max-width: 10rem;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <section class="message-box">
+      <div class="message-chat" id="chatBox"></div>
+      <div class="message-wrapper">
+        <div class="message-container" id="messageBox"></div>
+        <div class="chat-input">
+          <input type="text" id="message" />
+
+          <button type="button" id="sendMessage" disabled>Can't Send</button>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      const socket = new WebSocket("ws://localhost:9000");
+
+      function saveChat(message, channel_id = "general") {
+        let chats = localStorage.getItem(channel_id);
+
+        if (chats) {
+          chats = JSON.parse(chat);
+        } else {
+          chats = [];
+        }
+
+        chats.push(message);
+        localStorage.setItem(channel_id, JSON.stringify(chats));
+      }
+
+      function showChat(chatBox, channel_id = "general") {
+        const isExist = chatBox.querySelector(
+          `div[data-chat-id='${channel_id}']`
+        );
+        if (!isExist) {
+          const chat = document.createElement("div"); //dynamically
+          chat.classList.add("message");
+          chat.classList.add("chatID");
+          chat.setAttribute("data-chat-id", channel_id);
+          chat.addEventListener("click", function () {
+            messageBox.innerHTML = "";
+            let chat_id = this.getAttribute("data-chat-id");
+            let all_chats = localStorage.getItem(channel_id);
+
+            if (all_chats) {
+              all_chats = JSON.parse(all_chats);
+              all_chats.forEach((chat) => {
+                const user_id = localStorage.getItem("current_user_id");
+                const div = document.createElement("div");
+                div.textContent = chat.message;
+
+                if (chat.sender_id == user_id) div.classList.add("sender");
+                else div.classList.add("reciever");
+
+                div.classList.add("message");
+                messageBox.appendChild(div);
+              });
+            }
+          });
+          chat.innerHTML = `<b>${channel_id}</b>`;
+          chatBox.appendChild(chat);
+        }
+      }
+
+      socket.onopen = function () {
+        console.log("Connected to Server successfully");
+        sendMessage.removeAttribute("disabled");
+        sendMessage.innerText = "Send Message";
+      };
+
+      socket.onmessage = (event) => {
+        console.log("Message received", event.data);
+        let message = event.data;
+        try {
+          message = JSON.parse(message);
+        } catch (e) {
+          message = {
+            message,
+          };
+        }
+
+        if (message.channel_id) {
+          saveChat(message, message.channel_id);
+          showChat(chatBox, message.channel_id);
+        } else if (message.type && message.type == "set_user") {
+          localStorage.setItem("current_user_id", message.message);
+        } else {
+          saveChat(message);
+          showChat(chatBox);
+        }
+      };
+
+      socket.onerror = () => {
+        console.log("Error occured while connecting to Dbase");
+      };
+
+      socket.onclose = () => {
+        console.log("Client or Server Disconnected");
+      };
+
+      sendMessage.onclick = function () {
+        const mes = message.value;
+        const user_id = localStorage.getItem("current_user_id");
+        const send_obj = {
+          message: mes,
+          chat_id: "general",
+          user_id: user_id,
+        };
+        try {
+          socket.send(JSON.stringify(send_obj));
+          message.value = "";
+          const div = document.createElement("div");
+          div.textContent = mes;
+          div.classList.add("sender");
+          div.classList.add("message");
+          messageBox.appendChild(div);
+        } catch (e) {
+          alert("Message can't be sent");
+          console.log("error sending message", e);
+        }
+      };
+    </script>
+  </body>
+</html>
