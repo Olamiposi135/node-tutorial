@@ -4,12 +4,42 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title><%= title %></title>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <h1>Welcome to EJS</h1>
-    <b><%= text %> </b>
-    <p>This is a simple EJS template.</p>
-    <p>Current Date: <%= new Date().toLocaleDateString() %></p>
-    <p>Current Time: <%= new Date().toLocaleTimeString() %></p>
+    <main>
+      <div class="header">
+        <b><%- text %></b>
+      </div>
+      <aside class="menu">
+        <ul>
+          <% nav.forEach((nav) => { %>
+          <li><a href="<%= nav.link%>"><%= nav.title%> </a></li>
+          <% });%>
+        </ul>
+      </aside>
+
+      <section class="main">
+        <div>
+          <% const processedID = []; %> <% chats.forEach((chat)=> { %> <% const
+          reciever = chat.reciever %> <% const channel = chat.channel %> <%
+          if(processedID.includes(reciever._id) ||
+          processedID.includes(channel._id)) return; %>
+          <div>
+            <% if(reciever) { %>
+
+            <span><%= reciever.username %> </span>
+            <% } else if(channel) { %>
+
+            <span><%= channel.channel_name ?? channel.channel_id; %> </span>
+
+            <% } %>
+          </div>
+          <% }); %>
+        </div>
+      </section>
+    </main>
+
+    <script src="chat.js"></script>
   </body>
 </html>

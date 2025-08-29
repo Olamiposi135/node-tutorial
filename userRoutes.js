@@ -2,30 +2,64 @@ const express = require("express");
 const router = express.Router();
 const { User } = require("./models.js");
 const uuid = require("uuid");
+const { signUserToken } = require("./functions.js");
 
 router.post("/register", async (req, res) => {
-  const { username, first_name, last_name, email, password, confirm_password } =
-    req.body;
+  console.log("BODY:", req.body);
+  const {
+    username,
+    first_name,
+    last_name,
+    email,
+    phone_number,
+    password,
+    confirm_password,
+  } = req.body;
 
-  if (password != confirm_password) {
-    return res.status(400).send("Passwords do not match");
+  // Validation
+  if (password !== confirm_password) {
+    return res.status(500).send("Passwords do not match");
+  }
+
+  if (!username || !password || !first_name || !last_name) {
+    return res.status(500).send("All fields are required");
+  }
+
+  if (password.length < 6) {
+    return res.status(500).send("Password must be at least 6 characters");
   }
 
   try {
     const user_id = uuid.v4();
-    await User.create({
+    console.log("Creating user...");
+
+    // create a new user
+    const user = await User.create({
       user_id,
       username,
       first_name,
       last_name,
       email,
+      phone_number,
       password,
     });
-    // res.send("User created successfully");
-    res.redirect("/dashboard");
+
+    console.log("User created:", user.username);
+
+    // setting the cookie on the registration if the user is successfully registered
+    res.cookie("userID", signUserToken(user._id), {
+      httpOnly: true,
+      secure: false,
+      maxAge: 7 * 24 * 60 * 60, // 24 hours
+    });
+
+    console.log("Cookie set, redirecting...");
+
+    return res.redirect("/");
   } catch (error) {
     console.log("Error creating user:", error);
-    res.send("Error creating user");
+
+    res.sendStatus(500).send("Error creating user");
   }
 });
 
@@ -37,34 +71,60 @@ router.post(
   async function (req, res) {
     const { username, password } = req.body;
 
-    const user = await User.findOne({
-      username: username,
-    });
+    try {
+      if (!username || !password) {
+        return res.status(400).send("Username and password are required");
+      }
 
-    if (!user) {
-      return res.send("User not found");
+      const user = await User.findOne({
+        username: username,
+      });
+
+      console.log("Login attempt for:", username);
+
+      if (!user) {
+        return res.status(400).send("Invalid username ");
+      }
+
+      // Use async comparePassword method
+      const isValidPassword = await user.comparePassword(password);
+
+      if (!isValidPassword) {
+        return res.status(400).send("Invalid username or password");
+      }
+
+      // Set cookie
+      res.cookie("userID", signUserToken(user._id), {
+        httpOnly: true,
+        secure: false,
+        maxAge: 7 * 24 * 60 * 60, // 24 hours
+      });
+
+      console.log("Login successful, redirecting...");
+      return res.redirect("/");
+    } catch (error) {
+      console.error("Login error:", error);
+      return res.status(500).send("Login failed");
     }
-
-    const compare = user.comparePassword(password);
-
-    if (!compare) {
-      return res.send("Invalid password");
-    }
-
-    return res.redirect("/dashboard");
   }
 );
 
+router.all("/logout", function (req, res) {
+  res.clearCookie("userID");
+  req.user = false;
+  res.redirect("/login");
+});
+
 router.get("/register", function (req, res) {
-  res.render("signup");
+  return res.render("signup");
 });
 
 router.get("/login", function (req, res) {
-  res.render("login");
+  return res.render("login");
 });
 
 router.get("/dashboard", function (req, res) {
-  res.render("dashboard");
+  return res.render("dashboard");
 });
 
 module.exports = router;

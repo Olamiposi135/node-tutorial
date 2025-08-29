@@ -5,6 +5,7 @@ const env = require("dotenv");
 env.config();
 const fs = require("fs");
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const app = express(); //express is a framework that makes it easy to create a server
 const path = require("path");
 const ws = require("ws"); //websocket manager
@@ -14,23 +15,45 @@ const mongoose = require("mongoose");
 const UserRoutes = require("./userRoutes.js");
 const { User, Message, Channel } = require("./models.js");
 const multer = require("multer"); //middleware for handling multipart/form-data, which is used for uploading files
+const { verifyUserToken } = require("./functions.js");
 
 const html = fs.readFileSync(path.join(__dirname, "frontend.html"));
 
 app.set("view engine", "ejs"); //set the view engine to ejs
-app.set("views", path.join(__dirname, "html")); //loap up a settings
+app.set("views", path.join(__dirname, "html")); //loap up a settings on your app
+
+// User middleware
+const setUser = async (req, res, next) => {
+  const userID = verifyUserToken(req.cookies.userID);
+  if (userID) {
+    const user = await User.findById(userID.userID);
+
+    if (user) {
+      req.user = user;
+    } else {
+      req.user = false;
+    }
+  } else {
+    req.user = false;
+  }
+  next();
+};
+
+app.use(cookieParser());
 
 app.use(express.json()); //this allows us to parse json data from the request body
 
 app.use(express.static(path.join(__dirname, "public"))); //this allows us to serve static files from the public directory
 
-app.use(express.urlencoded({ extended: true })); //this allows us to parse url encoded data from the request body
+app.use(express.urlencoded()); //this allows us to parse url encoded data from the request body
+
+app.use(setUser); //
 
 //multer setup for file uploads
 const storage = multer.diskStorage({
   destination: "./public/uploads",
   filename: (req, file, cb) => {
-    cb(null, Date.now() + file.filename);
+    cb(null, Date.now().toString() + "_" + file.originalname);
   },
 });
 
@@ -38,7 +61,18 @@ const uploader = multer({
   storage: storage,
 });
 
-app.post("/upload", uploader.single("fieldName"));
+app.post("/upload", uploader.single("fieldName"), (req, res) => {
+  res.send(`
+    <script>
+    alert('File uploaded Successfully!!')
+    window.history.back();
+    </script>
+    `);
+});
+
+app.get("/upload", async (req, res) => {
+  res.render("upload");
+});
 
 //controller
 app.all("/endpoint", function (req, res) {
@@ -49,10 +83,24 @@ app.all("/endpoint", function (req, res) {
 app.use(UserRoutes);
 
 //test dynamic rendering of ejs rendering
-app.all("/second/endies", function (req, res) {
-  res.render("index", {
+app.all("/", async function (req, res) {
+  const user = req.user;
+
+  if (!user) {
+    return res.redirect("/login");
+  }
+  const chats = await user.load_chats();
+  res.render("chat", {
     title: "Second Template",
-    text: "This is the second template rendered dynamically.",
+    text: "<p>Testing the Dynamism of EJS template</p>",
+    nav: [
+      { title: "Home", link: "/" },
+      { title: "Shop", link: "/shop" },
+      { title: "Profile", link: "/profile" },
+      { title: "Settings", link: "/settings" },
+    ],
+    chats: chats,
+    user: user,
   });
 });
 
@@ -93,7 +141,7 @@ wss.on("connection", (socket) => {
   const user_id = uuid.v4();
 
   socket.on("message", (message) => {
-    console.log("Message received from Client is :", message);
+    console.log("Message received from Client is :", message.toString("utf-8"));
     try {
       //message must always be formatted in JSON format
       let text = JSON.parse(message.toString("utf-8"));
@@ -103,7 +151,28 @@ wss.on("connection", (socket) => {
         const formerUser = User.findOne({ user_id: text.former_user_id });
       }
 
-      const channel_info = channels[text.channel_id ?? "general"];
+      if (text.message == "update_chat_id") {
+        const allSockets = channels["general"].sockets;
+        const allUsers = channels["general"].users;
+
+        const last_id = text.last_chat_id;
+        const new_id = text.chat_id;
+
+        allUsers.delete(last_id);
+        allUsers.add(new_id);
+
+        for (const sock in allSockets) {
+          if (sock.user_id == last_id) {
+            sock.user_id = new_id;
+          }
+        }
+
+        channels["general"].sockets = allSockets;
+        channels["general"].users = allUsers;
+        return;
+      }
+
+      const channel_info = channels[text.channel_id ?? "general"]; //checking if the variable if falsy
 
       if (text.channel_id && !channels[text.channel_id]) {
         channels[text.channel_id] = {
@@ -111,11 +180,11 @@ wss.on("connection", (socket) => {
           users: new Set([text.sender_id]),
           creator_id: text.sender_id,
         };
-        if (text.recipent_id && channel_info.users.has(text.recipent_id)) {
+        if (text.recipient_id && channel_info.users.has(text.recipient_id)) {
           for (const user of channel_info.sockets) {
-            if (user.user_id === text.recipent_id) {
-              channels[text.chat_id].sockets.add(user);
-              channels[text.channel_id].users.add(text.recipent_id);
+            if (user.user_id == text.recipient_id) {
+              channels[text.channel_id].sockets.add(user);
+              channels[text.channel_id].users.add(text.recipient_id);
               text.online_users = channels[text.channel_id].sockets.size;
               user.socket.send(JSON.stringify(text));
               break;
@@ -127,12 +196,12 @@ wss.on("connection", (socket) => {
         // channel_info.sockets.add(socket);
 
         if (
-          text.recipent_id &&
-          channel_info.has(text.recipent_id) &&
+          text.recipient_id &&
+          channel_info.users.has(text.recipient_id) &&
           text.sender_id
         ) {
           for (const user of channel_info.sockets) {
-            if (text.recipent_id == user.user_id) {
+            if (text.recipient_id == user.user_id) {
               text.online_users = channel_info.sockets.size;
               user.socket.send(JSON.stringify(text));
               break;
@@ -158,8 +227,9 @@ wss.on("connection", (socket) => {
   });
 
   const send_obj = {
-    message: user_id,
+    message: "set_chat_id",
     type: "set_user",
+    chat_id: user_id,
   };
 
   channels["general"].users.add(user_id);
@@ -168,9 +238,9 @@ wss.on("connection", (socket) => {
     socket,
   };
 
-  User.create({
-    user_id,
-  });
+  // User.create({
+  //   user_id,
+  // });
 
   channels["general"].sockets.add(user_socket);
 

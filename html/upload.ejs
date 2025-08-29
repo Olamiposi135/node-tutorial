@@ -6,12 +6,11 @@
     <title>Document</title>
   </head>
   <body>
-    <h1>WELCOME TO THE DASHBOARD</h1>
-
     <div>
       <form action="/upload" method="post" enctype="multipart/form-data">
-        <input type="file" name="fieldName" id="" />
-        <button type="submit">Upload</button>
+        <div><label for="fieldName">Upload your file here</label></div>
+        <input type="file" name="fieldName" id="fieldName" />
+        <button type="submit">Submit</button>
       </form>
     </div>
   </body>

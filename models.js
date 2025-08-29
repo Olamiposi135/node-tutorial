@@ -11,21 +11,15 @@ const User = new Schema({
   },
   first_name: {
     type: String,
-    required: true,
-    miLength: 3,
-    default: "",
   },
   last_name: {
     type: String,
-    required: true,
-    miLength: 3,
-    default: "",
   },
   username: {
     type: String,
     required: true,
     unique: true,
-    miLength: 3,
+
     lowercase: true,
   },
   password: {
@@ -39,12 +33,9 @@ const User = new Schema({
   },
   email: {
     type: String,
-    unique: true,
+    default: "",
   },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-  },
+  timestamp: Date,
 });
 
 const Message = new Schema({
@@ -77,10 +68,24 @@ const Channels = new Schema({
   ],
   channel_name: String,
   channel_description: String,
+  channel_icon: String,
 });
 
 User.methods.get_id = function () {
   return this.user_id; //usage of this method to get user_id.. const user = User(id=id), const user_id = user.get_id();
+};
+
+User.methods.load_chats = async function () {
+  const id = this._id;
+  const message = model("Message", Message);
+  const messages = await message.find().populate("sender").exec();
+
+  const user_messages = messages.filter((message) => {
+    const user = message.sender;
+    return user._id === id;
+  });
+
+  return user_messages;
 };
 
 User.methods.comparePassword = function (password) {
@@ -88,11 +93,11 @@ User.methods.comparePassword = function (password) {
 };
 
 User.pre("save", function () {
-  this.password = bcrypt.hashSync(this.password, 10); //hashing the password before saving it to the database
+  this.password = bcrypt.hashSync(this.password, 10);
 });
 
 User.statics.find_user_by_id = function (id) {
-  return this.findOne((chat_id = id)); //usage of this method to find user by id.. User.find_user_by_id(id=id);
+  return this.findOne({ user_id: id }); //usage of this method to find user by id.. User.find_user_by_id(id=id);
 };
 
 User.pre("deleteOne", function () {

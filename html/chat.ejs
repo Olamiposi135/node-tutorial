@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp-like Template</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h3>Chats</h3>
+        <span>⚙️</span>
+      </div>
+      <div class="chat-list">
+        <% const processedID = []; %> <% chats.forEach((chat)=>{ %> <% const
+        reciever = chat.reciever; %> <% const channel = chat.channel; %> <% if(
+        processedID.includes(reciever._id) || processedID.includes(channel._id))
+        return; %>
+        <div class="chat-item">
+          <% if(reciever) { %>
+          <span class="image"
+            ><img src="<%= reciever.image %>" alt="" srcset=""
+          /></span>
+          <span class="name"><%= reciever.username %></span>
+          <% } else if(channel){ %>
+          <span class="name"
+            ><%= channel.channel_name ?? channel.channel_id; %></span
+          >
+          <% } %>
+        </div>
+        <% }); %>
+        <!--<div class="chat-item">John Doe</div>
+      <div class="chat-item">Jane Smith</div>
+      <div class="chat-item">Group Chat</div> -->
+      </div>
+    </div>
+
+    <!-- Chat Area -->
+    <div class="chat">
+      <div class="chat-header">
+        <h3
+          id="username"
+          chat_id="<%= user.user_id %>"
+          user_id="<%= user.username %>"
+        >
+          <%= user.username %>
+        </h3>
+        <span>⋮</span>
+      </div>
+      <div class="messages" id="messageBox" recipient_id="general">
+        <!--<div class="message received">Hey! How are you?</div>
+      <div class="message sent">I’m good, thanks! And you?</div>
+      <div class="message received">Doing well! What’s up?</div>
+      <div class="message sent">Just working on a project 😎</div> -->
+      </div>
+      <div class="chat-input">
+        <input type="text" placeholder="Type a message" id="message" />
+        <button id="sendMessage">➤</button>
+      </div>
+    </div>
+
+    <script src="chat.js"></script>
+  </body>
+</html>
